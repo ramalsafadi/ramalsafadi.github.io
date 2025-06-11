@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Segmentation Dashboard</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: Arial, sans-serif;
+        }
+
+        body {
+            background-color: #F5F7FA; /* Light Gray-Blue */
+            color: #1F2937; /* Dark Gray */
+            padding: 20px;
+        }
+
+        .dashboard {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        h1 {
+            text-align: center;
+            margin-bottom: 20px;
+            font-size: 1.5em;
+            color: #1E3A8A; /* Deep Blue */
+        }
+
+        .section {
+            background: #FFFFFF; /* White */
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .grouping, .timeline, .summary {
+            margin-bottom: 20px;
+        }
+
+        .group-list, .timeline-container {
+            margin-top: 10px;
+        }
+
+        .group-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: #F9FAFB; /* Very Light Gray */
+            border: 1px solid #D1D5DB; /* Light Gray */
+            border-radius: 4px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .group-item select, .group-item input {
+            margin-left: 10px;
+            padding: 5px;
+            border: 1px solid #D1D5DB;
+            border-radius: 4px;
+            color: #1F2937;
+        }
+
+        .timeline-container {
+            height: 250px;
+            overflow-x: auto;
+            background: #F9FAFB; /* Very Light Gray */
+            padding: 10px;
+            position: relative;
+            border: 1px solid #D1D5DB; /* Light Gray */
+        }
+
+        .timeline-item {
+            height: 100px;
+            background: #10B981; /* Emerald Green */
+            color: #FFFFFF; /* White */
+            padding: 10px;
+            border-radius: 4px;
+            position: absolute;
+            cursor: move;
+            user-select: none;
+            transition: background-color 0.3s;
+            min-width: 100px;
+        }
+
+        .timeline-item.overlap {
+            background: #EF4444; /* Red */
+        }
+
+        .summary-charts {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 20px;
+        }
+
+        canvas {
+            max-width: 100%;
+        }
+
+        button {
+            padding: 10px 20px;
+            background: #1E3A8A; /* Deep Blue */
+            color: #FFFFFF; /* White */
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background: #1E40AF; /* Slightly Lighter Deep Blue */
+        }
+
+        @media (min-width: 768px) {
+            .dashboard {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .summary {
+                grid-column: span 2;
+            }
+
+            .summary-charts {
+                grid-template-columns: 1fr 1fr 1fr;
+            }
+
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="dashboard">
+        <h1>Customer Segmentation Dashboard</h1>
+
+        <!-- Customer Grouping Section -->
+        <div class="section grouping">
+            <h2>Customer Grouping</h2>
+            <div class="group-list" id="groupList"></div>
+            <button onclick="addGroup()">Add Group</button>
+        </div>
+
+        <!-- Timeline Section -->
+        <div class="section timeline">
+            <h2>Price Variant Timeline</h2>
+            <div class="timeline-container" id="timeline"></div>
+        </div>
+
+        <!-- Summary Section -->
+        <div class="section summary">
+            <h2>Summary Metrics</h2>
+            <div class="summary-charts">
+                <canvas id="conversionChart"></canvas>
+                <canvas id="revenueChart"></canvas>
+                <canvas id="confidenceChart"></canvas>
+            </div>
+            <button onclick="downloadResults()">Download Results</button>
+        </div>
+    </div>
+
+    <!-- Include Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        // Sample data
+        let groups = [];
+        const criteriaOptions = ['Region', 'Age', 'Past Spend'];
+        const priceVariants = ['Variant A', 'Variant B'];
+        const pixelsPerDay = 5; // Pixels per day for timeline scaling
+
+        // Add new group
+        function addGroup() {
+            const today = new Date();
+            const groupId = groups.length + 1;
+            const startDate = today.toISOString().split('T')[0];
+            const endDate = new Date(today.setDate(today.getDate() + 7)).toISOString().split('T')[0]; // 1 week later
+            groups.push({ 
+                id: groupId, 
+                criteria: 'Region', 
+                value: '', 
+                variant: 'Variant A',
+                startDate: startDate,
+                endDate: endDate,
+                conversionRate: Math.random() * 100, // Simulated
+                totalRevenue: Math.random() * 10000, // Simulated
+                confidence: Math.random() * 100 // Simulated
+            });
+
+            const groupItem = document.createElement('div');
+            groupItem.className = 'group-item';
+            groupItem.innerHTML = `
+                Group ${groupId}: 
+                <select onchange="updateGroup(${groupId}, 'criteria', this.value)">
+                    ${criteriaOptions.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                </select>
+                <input type="text" placeholder="Value (e.g., East, 30-40)" onchange="updateGroup(${groupId}, 'value', this.value)">
+                <select onchange="updateGroup(${groupId}, 'variant', this.value)">
+                    ${priceVariants.map(opt => `<option value="${opt}">${opt}</option>`).join('')}
+                </select>
+                <input type="date" value="${startDate}" onchange="updateGroup(${groupId}, 'startDate', this.value)">
+                <input type="date" value="${endDate}" onchange="updateGroup(${groupId}, 'endDate', this.value)">
+            `;
+            document.getElementById('groupList').appendChild(groupItem);
+
+            addTimelineItem(groupId);
+            updateCharts();
+            checkOverlaps();
+        }
+
+        // Update group data
+        function updateGroup(id, field, value) {
+            const group = groups.find(g => g.id === id);
+            group[field] = value;
+            updateTimelineItem(id);
+            updateCharts();
+            checkOverlaps();
+        }
+
+        // Add timeline item
+        function addTimelineItem(groupId) {
+            const group = groups.find(g => g.id === groupId);
+            const timeline = document.getElementById('timeline');
+            const item = document.createElement('div');
+            item.className = 'timeline-item';
+            updateTimelineItemDimensions(item, group);
+            item.dataset.groupId = groupId;
+
+            // Dragging functionality
+            let isDragging = false;
+            let currentX;
+            let initialX;
+
+            item.addEventListener('mousedown', startDragging);
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('mouseup', stopDragging);
+
+            function startDragging(e) {
+                isDragging = true;
+                initialX = e.clientX - currentX;
+            }
+
+            function drag(e) {
+                if (!isDragging) return;
+                e.preventDefault();
+                currentX = e.clientX - initialX;
+                item.style.left = `${currentX}px`;
+                checkOverlaps();
+            }
+
+            function stopDragging() {
+                isDragging = false;
+            }
+
+            currentX = groupId * 160; // Initial offset
+            item.style.left = `${currentX}px`;
+            timeline.appendChild(item);
+        }
+
+        // Update timeline item dimensions and content
+        function updateTimelineItem(id) {
+            const group = groups.find(g => g.id === id);
+            const item = document.querySelector(`.timeline-item[data-group-id="${id}"]`);
+            if (item) {
+                updateTimelineItemDimensions(item, group);
+            }
+        }
+
+        function updateTimelineItemDimensions(item, group) {
+            const start = new Date(group.startDate);
+            const end = new Date(group.endDate);
+            const days = (end - start) / (1000 * 60 * 60 * 24);
+            const width = Math.max(days * pixelsPerDay, 100); // Minimum width of 100px
+            item.style.width = `${width}px`;
+            item.innerHTML = `Group ${group.id}<br>${group.variant}<br>${group.startDate} to ${group.endDate}`;
+        }
+
+        // Check for overlapping tests
+        function checkOverlaps() {
+            const items = document.querySelectorAll('.timeline-item');
+            items.forEach(item => item.classList.remove('overlap'));
+
+            for (let i = 0; i < groups.length; i++) {
+                for (let j = i + 1; j < groups.length; j++) {
+                    const groupA = groups[i];
+                    const groupB = groups[j];
+                    const itemA = document.querySelector(`.timeline-item[data-group-id="${groupA.id}"]`);
+                    const itemB = document.querySelector(`.timeline-item[data-group-id="${groupB.id}"]`);
+
+                    const rectA = itemA.getBoundingClientRect();
+                    const rectB = itemB.getBoundingClientRect();
+                    const startA = new Date(groupA.startDate);
+                    const endA = new Date(groupA.endDate);
+                    const startB = new Date(groupB.startDate);
+                    const endB = new Date(groupB.endDate);
+
+                    const dateOverlap = startA <= endB && startB <= endA;
+                    const positionOverlap = !(rectA.right < rectB.left || rectA.left > rectB.right);
+
+                    if (dateOverlap && positionOverlap) {
+                        itemA.classList.add('overlap');
+                        itemB.classList.add('overlap');
+                    }
+                }
+            }
+        }
+
+        // Chart initialization with updated colors
+        const conversionChart = new Chart(document.getElementById('conversionChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Conversion Rate (%)', data: [], backgroundColor: '#10B981' }] }, // Emerald Green
+            options: { scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+
+        const revenueChart = new Chart(document.getElementById('revenueChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Total Revenue ($)', data: [], backgroundColor: '#1E3A8A' }] }, // Deep Blue
+            options: { scales: { y: { beginAtZero: true } } }
+        });
+
+        const confidenceChart = new Chart(document.getElementById('confidenceChart'), {
+            type: 'bar',
+            data: { labels: [], datasets: [{ label: 'Confidence (%)', data: [], backgroundColor: '#F59E0B' }] }, // Amber (business-friendly)
+            options: { scales: { y: { beginAtZero: true, max: 100 } } }
+        });
+
+        // Update charts with data
+        function updateCharts() {
+            const labels = groups.map(g => `Group ${g.id}`);
+            const conversionData = groups.map(g => g.conversionRate);
+            const revenueData = groups.map(g => g.totalRevenue);
+            const confidenceData = groups.map(g => g.confidence);
+
+            conversionChart.data.labels = labels;
+            conversionChart.data.datasets[0].data = conversionData;
+            conversionChart.update();
+
+            revenueChart.data.labels = labels;
+            revenueChart.data.datasets[0].data = revenueData;
+            revenueChart.update();
+
+            confidenceChart.data.labels = labels;
+            confidenceChart.data.datasets[0].data = confidenceData;
+            confidenceChart.update();
+        }
+
+        // Download results as CSV
+        function downloadResults() {
+            const headers = ['Group ID', 'Criteria', 'Value', 'Price Variant', 'Start Date', 'End Date', 'Conversion Rate (%)', 'Total Revenue ($)', 'Confidence (%)'];
+            const rows = groups.map(group => [
+                group.id,
+                group.criteria,
+                group.value,
+                group.variant,
+                group.startDate,
+                group.endDate,
+                group.conversionRate.toFixed(2),
+                group.totalRevenue.toFixed(2),
+                group.confidence.toFixed(2)
+            ]);
+
+            let csvContent = 'data:text/csv;charset=utf-8,' + headers.join(',') + '\n' + rows.map(row => row.join(',')).join('\n');
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement('a');
+            link.setAttribute('href', encodedUri);
+            link.setAttribute('download', 'test_results.csv');
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // Initialize with one group
+        addGroup();
+    </script>
+</body>
+</html>
